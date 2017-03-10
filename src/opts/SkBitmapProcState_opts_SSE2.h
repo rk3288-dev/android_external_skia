@@ -10,12 +10,6 @@
 
 #include "SkBitmapProcState.h"
 
-void S32_opaque_D32_filter_DX_SSE2(const SkBitmapProcState& s,
-                                   const uint32_t* xy,
-                                   int count, uint32_t* colors);
-void S32_alpha_D32_filter_DX_SSE2(const SkBitmapProcState& s,
-                                  const uint32_t* xy,
-                                  int count, uint32_t* colors);
 void Color32_SSE2(SkPMColor dst[], const SkPMColor src[], int count,
                   SkPMColor color);
 void ClampX_ClampY_filter_scale_SSE2(const SkBitmapProcState& s, uint32_t xy[],
@@ -29,5 +23,9 @@ void ClampX_ClampY_nofilter_affine_SSE2(const SkBitmapProcState& s,
 void S32_D16_filter_DX_SSE2(const SkBitmapProcState& s,
                             const uint32_t* xy,
                             int count, uint16_t* colors);
-
+#if !defined(__x86_64__)
+void S32_opaque_D32_nofilter_DX_SSE2(const SkBitmapProcState& s,
+                                     const uint32_t* xy,
+                                     int count, uint32_t* colors);
+#endif
 #endif

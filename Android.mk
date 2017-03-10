@@ -515,6 +515,7 @@ LOCAL_SRC_FILES := \
 
 LOCAL_SHARED_LIBRARIES := \
 	liblog \
+	libcutils \
 	libGLESv2 \
 	libEGL \
 	libz \
@@ -530,6 +531,13 @@ LOCAL_STATIC_LIBRARIES := \
 	libwebp-encode \
 	libgif \
 	libsfntly
+
+ifeq ($(ADD_INTEL_SKIMAGEDECODER), true)
+LOCAL_STATIC_LIBRARIES += libskia_ext libjpeg-turbo-static libsimd \
+	libippj libippi libipps libippcore
+LOCAL_SHARED_LIBRARIES += libcutils libutils
+LOCAL_CFLAGS += -DADD_INTEL_SKIMAGEDECODER
+endif
 
 LOCAL_C_INCLUDES := \
 	$(LOCAL_PATH)/include/config \
@@ -566,6 +574,13 @@ LOCAL_C_INCLUDES := \
 	external/sfntly/cpp/src \
 	external/zlib
 
+ifeq ($(DEVICE_HAVE_LIBRKVPU), true)
+LOCAL_CFLAGS += -DUSE_HW_JPEG
+LOCAL_SRC_FILES += src/images/SkHwJpegUtility.cpp
+LOCAL_SHARED_LIBRARIES += libjpeghwdec
+LOCAL_C_INCLUDES += hardware/rockchip/jpeghw/release/decoder_release \
+		hardware/rockchip/librkvpu
+endif
 LOCAL_EXPORT_C_INCLUDE_DIRS := \
 	$(LOCAL_PATH)/include/config \
 	$(LOCAL_PATH)/include/core \
@@ -603,7 +618,8 @@ LOCAL_SRC_FILES_arm += \
 	src/opts/SkBlitRow_opts_arm_neon.cpp \
 	src/opts/SkBlurImage_opts_neon.cpp \
 	src/opts/SkMorphology_opts_neon.cpp \
-	src/opts/SkXfermode_opts_arm_neon.cpp
+	src/opts/SkXfermode_opts_arm_neon.cpp \
+	src/opts/ext/S32_Opaque_D32_filter_DX_shaderproc_neon.cpp
 
 LOCAL_CFLAGS_arm += \
 	-D__ARM_HAVE_NEON
@@ -611,23 +627,26 @@ LOCAL_CFLAGS_arm += \
 endif
 
 LOCAL_CFLAGS_x86 += \
-	-msse2 \
+	-mssse3 \
 	-mfpmath=sse
 
 LOCAL_SRC_FILES_x86 += \
 	src/opts/opts_check_x86.cpp \
 	src/opts/SkBitmapProcState_opts_SSE2.cpp \
+	src/opts/SkBitmapProcState_opts_SSE2_asm.S \
 	src/opts/SkBitmapFilter_opts_SSE2.cpp \
 	src/opts/SkBlitRow_opts_SSE2.cpp \
 	src/opts/SkBlitRect_opts_SSE2.cpp \
 	src/opts/SkBlurImage_opts_SSE2.cpp \
+	src/opts/SkBlurImage_opts_SSE4.cpp \
 	src/opts/SkMorphology_opts_SSE2.cpp \
 	src/opts/SkUtils_opts_SSE2.cpp \
 	src/opts/SkXfermode_opts_SSE2.cpp \
-	src/opts/SkBitmapProcState_opts_SSSE3.cpp
+	src/opts/SkBitmapProcState_opts_SSSE3.cpp \
+	src/opts/SkBlitRow_opts_SSE4_asm.S
 
 LOCAL_CFLAGS_x86_64 += \
-	-msse2 \
+	-msse4.2 \
 	-mfpmath=sse
 
 LOCAL_SRC_FILES_x86_64 += \
@@ -637,10 +656,12 @@ LOCAL_SRC_FILES_x86_64 += \
 	src/opts/SkBlitRow_opts_SSE2.cpp \
 	src/opts/SkBlitRect_opts_SSE2.cpp \
 	src/opts/SkBlurImage_opts_SSE2.cpp \
+	src/opts/SkBlurImage_opts_SSE4.cpp \
 	src/opts/SkMorphology_opts_SSE2.cpp \
 	src/opts/SkUtils_opts_SSE2.cpp \
 	src/opts/SkXfermode_opts_SSE2.cpp \
-	src/opts/SkBitmapProcState_opts_SSSE3.cpp
+	src/opts/SkBitmapProcState_opts_SSSE3.cpp \
+	src/opts/SkBlitRow_opts_SSE4_x64_asm.S
 
 LOCAL_CFLAGS_mips += \
 	-EL

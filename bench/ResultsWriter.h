@@ -60,7 +60,7 @@ public:
     }
     virtual void bench(const char name[], int32_t x, int32_t y) {
         fLogger.logProgress(SkStringPrintf(
-            "\nrunning bench [%3d %3d] %40s", x, y, name));
+            "\nrunning bench [%3d %3d] %40s\n", x, y, name));
     }
     virtual void config(const char name[]) {
         fLogger.logProgress(SkStringPrintf("   %s:", name));
@@ -68,6 +68,7 @@ public:
     virtual void timer(const char name[], double ms) {
         fLogger.logProgress(SkStringPrintf("  %s = ", name));
         fLogger.logProgress(SkStringPrintf(fTimeFormat, ms));
+        fLogger.logProgress("\n");
     }
     virtual void end() {
         fLogger.logProgress("\n");

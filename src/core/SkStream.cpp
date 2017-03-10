@@ -14,6 +14,10 @@
 #include "SkOSFile.h"
 
 ///////////////////////////////////////////////////////////////////////////////
+bool SkStream::markSupport(){
+    //for show whether support reset() or mark() in java, add by WH
+    return false;
+}
 
 
 int8_t SkStream::readS8() {

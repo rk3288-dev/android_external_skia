@@ -66,7 +66,7 @@ private:
 #else
     void nativeLogError(const char msg[]) { fprintf(stderr, "%s", msg); }
 #endif
-    void nativeLogProgress(const char msg[]) { SkDebugf("%s", msg); }
+    void nativeLogProgress(const char msg[]) { printf("%s", msg); }
 
     void fileWrite(const char msg[], size_t size);
 

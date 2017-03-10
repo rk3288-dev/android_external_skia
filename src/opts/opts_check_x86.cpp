@@ -12,7 +12,9 @@
 #include "SkBlitRect_opts_SSE2.h"
 #include "SkBlitRow.h"
 #include "SkBlitRow_opts_SSE2.h"
+#include "SkBlitRow_opts_SSE4.h"
 #include "SkBlurImage_opts_SSE2.h"
+#include "SkBlurImage_opts_SSE4.h"
 #include "SkMorphology_opts.h"
 #include "SkMorphology_opts_SSE2.h"
 #include "SkRTConf.h"
@@ -82,6 +84,8 @@ static int get_SIMD_level() {
     getcpuid(1, cpu_info);
     if ((cpu_info[2] & (1<<20)) != 0) {
         return SK_CPU_SSE_LEVEL_SSE42;
+    } else if ((cpu_info[2] & (1<<19)) != 0) {
+        return SK_CPU_SSE_LEVEL_SSE41;
     } else if ((cpu_info[2] & (1<<9)) != 0) {
         return SK_CPU_SSE_LEVEL_SSSE3;
     } else if ((cpu_info[3] & (1<<26)) != 0) {
@@ -101,18 +105,8 @@ static inline bool supports_simd(int minLevel) {
     } else
 #endif
     {
-#if defined(SK_BUILD_FOR_ANDROID_FRAMEWORK)
-        /* For the Android framework we should always know at compile time if the device
-         * we are building for supports SSSE3.  The one exception to this rule is on the
-         * emulator where we are compiled without the -mssse3 option (so we have no
-         * SSSE3 procs) but can be run on a host machine that supports SSSE3
-         * instructions. So for that particular case we disable our SSSE3 options.
-         */
-        return false;
-#else
         static int gSIMDLevel = get_SIMD_level();
         return (minLevel <= gSIMDLevel);
-#endif
     }
 }
 
@@ -142,8 +136,6 @@ void SkBitmapProcState::platformProcs() {
     if (fSampleProc32 == S32_opaque_D32_filter_DX) {
         if (supports_simd(SK_CPU_SSE_LEVEL_SSSE3)) {
             fSampleProc32 = S32_opaque_D32_filter_DX_SSSE3;
-        } else {
-            fSampleProc32 = S32_opaque_D32_filter_DX_SSE2;
         }
     } else if (fSampleProc32 == S32_opaque_D32_filter_DXDY) {
         if (supports_simd(SK_CPU_SSE_LEVEL_SSSE3)) {
@@ -152,13 +144,15 @@ void SkBitmapProcState::platformProcs() {
     } else if (fSampleProc32 == S32_alpha_D32_filter_DX) {
         if (supports_simd(SK_CPU_SSE_LEVEL_SSSE3)) {
             fSampleProc32 = S32_alpha_D32_filter_DX_SSSE3;
-        } else {
-            fSampleProc32 = S32_alpha_D32_filter_DX_SSE2;
         }
     } else if (fSampleProc32 == S32_alpha_D32_filter_DXDY) {
         if (supports_simd(SK_CPU_SSE_LEVEL_SSSE3)) {
             fSampleProc32 = S32_alpha_D32_filter_DXDY_SSSE3;
         }
+    } else if (fSampleProc32 == S32_opaque_D32_nofilter_DX) {
+#if !defined(__x86_64__)
+        fSampleProc32 = S32_opaque_D32_nofilter_DX_SSE2; // Not 64-bit compatible
+#endif
     }
 
     /* Check fSampleProc16 */
@@ -189,11 +183,11 @@ void SkBitmapProcState::platformProcs() {
 
 static SkBlitRow::Proc platform_16_procs[] = {
     S32_D565_Opaque_SSE2,               // S32_D565_Opaque
-    NULL,                               // S32_D565_Blend
+    S32_D565_Blend_SSE2,                // S32_D565_Blend
     S32A_D565_Opaque_SSE2,              // S32A_D565_Opaque
-    NULL,                               // S32A_D565_Blend
+    S32A_D565_Blend_SSE2,               // S32A_D565_Blend
     S32_D565_Opaque_Dither_SSE2,        // S32_D565_Opaque_Dither
-    NULL,                               // S32_D565_Blend_Dither
+    S32_D565_Blend_Dither_SSE2,         // S32_D565_Blend_Dither
     S32A_D565_Opaque_Dither_SSE2,       // S32A_D565_Opaque_Dither
     NULL,                               // S32A_D565_Blend_Dither
 };
@@ -206,16 +200,30 @@ SkBlitRow::Proc SkBlitRow::PlatformProcs565(unsigned flags) {
     }
 }
 
-static SkBlitRow::Proc32 platform_32_procs[] = {
+static SkBlitRow::Proc32 platform_32_procs_SSE2[] = {
     NULL,                               // S32_Opaque,
     S32_Blend_BlitRow32_SSE2,           // S32_Blend,
     S32A_Opaque_BlitRow32_SSE2,         // S32A_Opaque
     S32A_Blend_BlitRow32_SSE2,          // S32A_Blend,
 };
 
+#if defined(SK_ATT_ASM_SUPPORTED)
+static SkBlitRow::Proc32 platform_32_procs_SSE4[] = {
+    NULL,                               // S32_Opaque,
+    S32_Blend_BlitRow32_SSE2,           // S32_Blend,
+    S32A_Opaque_BlitRow32_SSE4_asm,     // S32A_Opaque
+    S32A_Blend_BlitRow32_SSE4_asm       // S32A_Blend,
+};
+#endif
+
 SkBlitRow::Proc32 SkBlitRow::PlatformProcs32(unsigned flags) {
+#if defined(SK_ATT_ASM_SUPPORTED)
+    if (supports_simd(SK_CPU_SSE_LEVEL_SSE41)) {
+        return platform_32_procs_SSE4[flags];
+    } else
+#endif
     if (supports_simd(SK_CPU_SSE_LEVEL_SSE2)) {
-        return platform_32_procs[flags];
+        return platform_32_procs_SSE2[flags];
     } else {
         return NULL;
     }
@@ -232,14 +240,11 @@ SkBlitRow::ColorProc SkBlitRow::PlatformColorProc() {
 SkBlitRow::ColorRectProc PlatformColorRectProcFactory(); // suppress warning
 
 SkBlitRow::ColorRectProc PlatformColorRectProcFactory() {
-/* Return NULL for now, since the optimized path in ColorRect32_SSE2 is disabled.
     if (supports_simd(SK_CPU_SSE_LEVEL_SSE2)) {
         return ColorRect32_SSE2;
     } else {
         return NULL;
     }
-*/
-    return NULL;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -289,7 +294,7 @@ SkBlitMask::RowProc SkBlitMask::PlatformRowProcs(SkColorType, SkMask::Format, Ro
 
 SkMemset16Proc SkMemset16GetPlatformProc() {
     if (supports_simd(SK_CPU_SSE_LEVEL_SSE2)) {
-        return sk_memset16_SSE2;
+        return SkMemset16_x86;
     } else {
         return NULL;
     }
@@ -297,10 +302,26 @@ SkMemset16Proc SkMemset16GetPlatformProc() {
 
 SkMemset32Proc SkMemset32GetPlatformProc() {
     if (supports_simd(SK_CPU_SSE_LEVEL_SSE2)) {
-        return sk_memset32_SSE2;
+        return SkMemset32_x86;
     } else {
         return NULL;
     }
+}
+
+SkSetPixelRow16Proc SkSetPixelRow16GetPlatformProc() {
+    return SkSetPixelRow16_x86;
+}
+
+SkSetPixelRow32Proc SkSetPixelRow32GetPlatformProc() {
+    return SkSetPixelRow32_x86;
+}
+
+SkSetPixelRect16Proc SkSetPixelRect16GetPlatformProc() {
+    return SkSetPixelRect16_x86;
+}
+
+SkSetPixelRect32Proc SkSetPixelRect32GetPlatformProc() {
+    return SkSetPixelRect32_x86;
 }
 
 SkMemcpy32Proc SkMemcpy32GetPlatformProc() {
@@ -340,10 +361,13 @@ bool SkBoxBlurGetPlatformProcs(SkBoxBlurProc* boxBlurX,
 #ifdef SK_DISABLE_BLUR_DIVISION_OPTIMIZATION
     return false;
 #else
-    if (!supports_simd(SK_CPU_SSE_LEVEL_SSE2)) {
-        return false;
+    if (supports_simd(SK_CPU_SSE_LEVEL_SSE41)) {
+        return SkBoxBlurGetPlatformProcs_SSE4(boxBlurX, boxBlurY, boxBlurXY, boxBlurYX);
     }
-    return SkBoxBlurGetPlatformProcs_SSE2(boxBlurX, boxBlurY, boxBlurXY, boxBlurYX);
+    else if (supports_simd(SK_CPU_SSE_LEVEL_SSE2)) {
+        return SkBoxBlurGetPlatformProcs_SSE2(boxBlurX, boxBlurY, boxBlurXY, boxBlurYX);
+    }
+    return false;
 #endif
 }
 
